@@ -61,6 +61,44 @@ Y_outsAndScrap_AM(){ # Outs and Scrap for Yield per tool
     cp ../draw/$DATE2EXTRACT-$shift-Y-$process.csv ../Y/$DATE2EXTRACT-$shift-Y-$process.csv
 }
 
+Y_outsAndScrap_PREPM(){ # Outs and Scrap for Yield per tool
+
+    mysql -h$MESHOST -u $MESUSER -p$MESPASS $MESDB -e "SET time_zone = '+08:00'; SELECT A.eq_name AS eq_name, A.scrap_qty AS scrap_qty, B.out_qty AS out_qty FROM   (SELECT B.eq_name, SUM(A.scrap_qty) AS scrap_qty    FROM MES_SCRAP_DETAILS A      JOIN MES_EQ_INFO B  ON A.eq_id = B.eq_id     WHERE DATE(DATE_ADD(A.date_time, INTERVAL -1110 MINUTE)) = DATE(DATE_ADD('$DATE2EXTRACT', INTERVAL -0 MINUTE))   AND A.process_id = '$process'     GROUP BY B.eq_name ) A JOIN   (SELECT B.eq_name, SUM(A.out_qty) AS out_qty     FROM MES_OUT_DETAILS A     JOIN MES_EQ_INFO B   ON A.eq_id = B.eq_id    WHERE DATE(DATE_ADD(A.date_time, INTERVAL -1110 MINUTE)) = DATE(DATE_ADD('$DATE2EXTRACT', INTERVAL -0 MINUTE))   AND A.process_id = '$process'  GROUP BY B.eq_name ) B ON A.eq_name = B.eq_name;" | sed 's/\t/,/g' > ../draw/$DATE2EXTRACT-$shift-Y-$process.csv 
+
+    cp ../draw/$DATE2EXTRACT-$shift-Y-$process.csv ../Y/$DATE2EXTRACT-$shift-Y-$process.csv
+}
+
+Y_outsAndScrap_POSTPM(){ # Outs and Scrap for Yield per tool
+
+    mysql -h$MESHOST -u $MESUSER -p$MESPASS $MESDB -e "SET time_zone = '+08:00'; SELECT A.eq_name AS eq_name, A.scrap_qty AS scrap_qty, B.out_qty AS out_qty FROM   (SELECT B.eq_name, SUM(A.scrap_qty) AS scrap_qty    FROM MES_SCRAP_DETAILS A      JOIN MES_EQ_INFO B  ON A.eq_id = B.eq_id     WHERE DATE(DATE_ADD(A.date_time, INTERVAL -1110 MINUTE)) = DATE(DATE_ADD('$DATE2EXTRACT', INTERVAL -1 DAY))   AND A.process_id = '$process'     GROUP BY B.eq_name ) A JOIN   (SELECT B.eq_name, SUM(A.out_qty) AS out_qty     FROM MES_OUT_DETAILS A     JOIN MES_EQ_INFO B   ON A.eq_id = B.eq_id    WHERE DATE(DATE_ADD(A.date_time, INTERVAL -1110 MINUTE)) = DATE(DATE_ADD('$DATE2EXTRACT', INTERVAL -1 DAY))   AND A.process_id = '$process'  GROUP BY B.eq_name ) B ON A.eq_name = B.eq_name" | sed 's/\t/,/g' > ../draw/$DATE2EXTRACT-$shift-Y-$process.csv 
+
+    cp ../draw/$DATE2EXTRACT-$shift-Y-$process.csv ../Y/$DATE2EXTRACT-$shift-Y-$process.csv
+}
+
+S_scrap_qty_AM(){ # Scrap qty for Scrap dppm
+
+    mysql -h$MESHOST -u $MESUSER -p$MESPASS $MESDB -e "SET time_zone = '+08:00'; SELECT scrap_code, SUM(scrap_qty) AS scrap_qty FROM MES_SCRAP_DETAILS WHERE DATE(DATE_ADD(date_time, INTERVAL -390 MINUTE)) = DATE(DATE_ADD('$DATE2EXTRACT', INTERVAL -0 MINUTE)) AND process_id = '$process' GROUP BY scrap_code ORDER BY SUM(scrap_qty) DESC LIMIT 5;" | sed 's/\t/,/g' > ../draw/$DATE2EXTRACT-$shift-S-$process.csv 
+
+    cp ../draw/$DATE2EXTRACT-$shift-S-$process.csv ../S/$DATE2EXTRACT-$shift-S-$process.csv
+
+}
+
+S_scrap_qty_PREPM(){ # Scrap qty for Scrap dppm
+
+    mysql -h$MESHOST -u $MESUSER -p$MESPASS $MESDB -e "SET time_zone = '+08:00'; SELECT scrap_code, SUM(scrap_qty) AS scrap_qty FROM MES_SCRAP_DETAILS WHERE DATE(DATE_ADD(date_time, INTERVAL -1110 MINUTE)) = DATE(DATE_ADD('$DATE2EXTRACT', INTERVAL -0 MINUTE)) AND process_id = '$process' GROUP BY scrap_code ORDER BY SUM(scrap_qty) DESC LIMIT 5;" | sed 's/\t/,/g' > ../draw/$DATE2EXTRACT-$shift-S-$process.csv 
+
+    cp ../draw/$DATE2EXTRACT-$shift-S-$process.csv ../S/$DATE2EXTRACT-$shift-S-$process.csv
+
+}
+
+S_scrap_qty_POSTPM(){ # Scrap qty for Scrap dppm
+
+    mysql -h$MESHOST -u $MESUSER -p$MESPASS $MESDB -e "SET time_zone = '+08:00'; SELECT scrap_code, SUM(scrap_qty) AS scrap_qty FROM MES_SCRAP_DETAILS WHERE DATE(DATE_ADD(date_time, INTERVAL -1110 MINUTE)) = DATE(DATE_ADD('$DATE2EXTRACT', INTERVAL -1 DAY)) AND process_id = '$process' GROUP BY scrap_code ORDER BY SUM(scrap_qty) DESC LIMIT 5;" | sed 's/\t/,/g' > ../draw/$DATE2EXTRACT-$shift-S-$process.csv 
+
+    cp ../draw/$DATE2EXTRACT-$shift-S-$process.csv ../S/$DATE2EXTRACT-$shift-S-$process.csv
+
+}
+
 echo "on going ..."
 for process_name in ${PROCESSLIST[@]}
 do  
@@ -68,21 +106,28 @@ do
 
     if (( $now > $AM_start_of_shift )) && (( $now < $AM_end_of_shift )) ; then
         shift='AM'
+
         echo $process - "AM shift"
         L_hourly_AM # AM "Hourly Outs"
         Y_outsAndScrap_AM # AM "Outs and Scrap"
+        S_scrap_qty_AM # Scrap qty
 
     elif (( $now > $PM_start_of_shift  )) && (( $now < $PM_premid_shift )) ; then
         shift='PM'
 
         echo $process - "PREPM shift"
         L_hourly_PREPM # PREPM Hourly Outs
+        Y_outsAndScrap_PREPM # PREPM "Outs and Scrap"
+        S_scrap_qty_PREPM # Scrap qty
 
     elif (( $now > $PM_postmid_shift )) && (( $now < $PM_end_of_shift )); then
         shift='PM'
 
         echo $process - "POSTPM shift"
         L_hourly_POSTPM # POSTPM hourly outs
+        Y_outsAndScrap_POSTPM # POSTPM "Outs and Scrap"
+        S_scrap_qty_POSTPM # Scrap qty
+        
     fi
 
 
